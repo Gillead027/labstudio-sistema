@@ -2,15 +2,14 @@ FROM ghcr.io/puppeteer/puppeteer:22.6.0
 
 USER root
 
-# Instala dependências necessárias para o Chrome no Linux
+# Instala TODAS as bibliotecas que o Chrome exige no Linux
 RUN apt-get update && apt-get install -y \
     libnss3 \
     libdbus-1-3 \
     libatk1.0-0 \
     libasound2 \
-    libxcasn1-3 \
-    libxss1 \
-    libgtk-3-0 \
+    libxshmfence1 \
+    libglu1-mesa \
     libgbm1 \
     --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
@@ -22,7 +21,7 @@ RUN npm install
 
 COPY . .
 
-# Expõe a porta que o seu servidor usa
+# O Render usa portas dinâmicas, o EXPOSE é apenas informativo
 EXPOSE 3001
 
 CMD ["node", "server.js"]
