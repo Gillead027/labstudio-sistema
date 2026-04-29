@@ -11,8 +11,9 @@ app.use(express.json());
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
-        args: ['--no-sandbox', '--disable-setuid-sandbox'], // 🔥 ADICIONE ISSO AQUI PARA O RENDER NÃO DAR ERRO
-        headless: true // Na nuvem precisa ser true (invisível)
+        executablePath: '/opt/render/.cache/puppeteer/chrome/linux-146.0.7680.31/chrome-linux64/chrome', // 🔥 CAMINHO DIRETO
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        headless: true
     }
 });
 
