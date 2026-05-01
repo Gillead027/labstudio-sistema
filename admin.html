@@ -226,7 +226,7 @@
     const btnLimpar = document.getElementById("btnLimpar");
 
     // ===============================
-    // FORMATAR DATA PARA PT-BR
+    // FORMATAR DATA
     // ===============================
     function formatarData(data) {
       if (!data) return "";
@@ -235,7 +235,7 @@
     }
 
     // ===============================
-    // GERAR CLASSE VISUAL DO STATUS
+    // CLASSE VISUAL DO STATUS
     // ===============================
     function classeStatus(status) {
       if (status === "compareceu") return "status status-compareceu";
@@ -245,7 +245,7 @@
     }
 
     // ===============================
-    // BUSCAR AGENDAMENTOS NO SUPABASE
+    // CARREGAR AGENDAMENTOS
     // ===============================
     async function carregarAgendamentos() {
       lista.innerHTML = '<div class="vazio">Carregando agendamentos...</div>';
@@ -278,7 +278,7 @@
 
       lista.innerHTML = "";
 
-      data.forEach(agendamento => {
+      data.forEach((agendamento) => {
         const status = agendamento.status || "agendado";
 
         const card = document.createElement("div");
@@ -297,19 +297,32 @@
           </div>
 
           <div class="acoes">
-            <button class="btn-presenca" onclick="confirmarPresenca(${agendamento.id}, '${agendamento.telefone}')">
-              Confirmar presença
-            </button>
-
-            <button class="btn-falta" onclick="marcarFalta(${agendamento.id}, '${agendamento.telefone}')">
-              Marcar falta
-            </button>
-
-            <button class="btn-cancelar" onclick="cancelarAgendamento(${agendamento.id})">
-              Cancelar
-            </button>
+            <button class="btn-presenca">Confirmar presença</button>
+            <button class="btn-falta">Marcar falta</button>
+            <button class="btn-cancelar">Cancelar</button>
           </div>
         `;
+
+        // ===============================
+        // EVENTOS DOS BOTÕES
+        // Aqui é melhor do que onclick direto
+        // porque funciona com id UUID e evita erro silencioso
+        // ===============================
+        const btnPresenca = card.querySelector(".btn-presenca");
+        const btnFalta = card.querySelector(".btn-falta");
+        const btnCancelar = card.querySelector(".btn-cancelar");
+
+        btnPresenca.addEventListener("click", () => {
+          confirmarPresenca(agendamento.id, agendamento.telefone);
+        });
+
+        btnFalta.addEventListener("click", () => {
+          marcarFalta(agendamento.id, agendamento.telefone);
+        });
+
+        btnCancelar.addEventListener("click", () => {
+          cancelarAgendamento(agendamento.id);
+        });
 
         lista.appendChild(card);
       });
@@ -317,12 +330,12 @@
 
     // ===============================
     // CONFIRMAR PRESENÇA
-    // Atualiza o agendamento para "compareceu"
-    // e soma +1 presença no usuário
     // ===============================
     async function confirmarPresenca(agendamentoId, telefone) {
       const confirmar = confirm("Confirmar presença deste jovem?");
       if (!confirmar) return;
+
+      console.log("Confirmando presença:", agendamentoId, telefone);
 
       const { error: erroAgenda } = await client
         .from("agendamentos")
@@ -345,13 +358,12 @@
 
     // ===============================
     // MARCAR FALTA
-    // Atualiza o agendamento para "faltou"
-    // Soma +1 falta no usuário
-    // Se chegar em 2 faltas, bloqueia usuário
     // ===============================
     async function marcarFalta(agendamentoId, telefone) {
       const confirmar = confirm("Marcar falta para este jovem?");
       if (!confirmar) return;
+
+      console.log("Marcando falta:", agendamentoId, telefone);
 
       const { error: erroAgenda } = await client
         .from("agendamentos")
@@ -373,12 +385,12 @@
 
     // ===============================
     // CANCELAR AGENDAMENTO
-    // Atualiza o status para cancelado
-    // Isso libera o horário no index.html
     // ===============================
     async function cancelarAgendamento(agendamentoId) {
       const confirmar = confirm("Cancelar este agendamento?");
       if (!confirmar) return;
+
+      console.log("Cancelando agendamento:", agendamentoId);
 
       const { error } = await client
         .from("agendamentos")
@@ -400,7 +412,10 @@
     // SOMAR PRESENÇA NO USUÁRIO
     // ===============================
     async function somarPresencaUsuario(telefone) {
-      if (!telefone) return;
+      if (!telefone) {
+        console.warn("Sem telefone para somar presença.");
+        return;
+      }
 
       const { data: usuario, error } = await client
         .from("usuarios")
@@ -415,19 +430,26 @@
 
       const presencasAtuais = Number(usuario.presencas || 0);
 
-      await client
+      const { error: erroUpdate } = await client
         .from("usuarios")
         .update({
           presencas: presencasAtuais + 1
         })
         .eq("id", usuario.id);
+
+      if (erroUpdate) {
+        console.warn("Erro ao somar presença:", erroUpdate.message);
+      }
     }
 
     // ===============================
     // SOMAR FALTA NO USUÁRIO
     // ===============================
     async function somarFaltaUsuario(telefone) {
-      if (!telefone) return;
+      if (!telefone) {
+        console.warn("Sem telefone para somar falta.");
+        return;
+      }
 
       const { data: usuario, error } = await client
         .from("usuarios")
@@ -445,17 +467,21 @@
 
       const novoStatus = novasFaltas >= 2 ? "bloqueado" : usuario.status;
 
-      await client
+      const { error: erroUpdate } = await client
         .from("usuarios")
         .update({
           faltas: novasFaltas,
           status: novoStatus
         })
         .eq("id", usuario.id);
+
+      if (erroUpdate) {
+        console.warn("Erro ao somar falta:", erroUpdate.message);
+      }
     }
 
     // ===============================
-    // BOTÕES DE FILTRO
+    // FILTROS
     // ===============================
     btnFiltrar.addEventListener("click", carregarAgendamentos);
 
@@ -466,7 +492,7 @@
     });
 
     // ===============================
-    // CARREGA LISTA AO ABRIR A PÁGINA
+    // CARREGA AO ABRIR
     // ===============================
     carregarAgendamentos();
   </script>
