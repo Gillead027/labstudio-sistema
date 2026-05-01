@@ -3,140 +3,267 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LabStudio CRJ Flexal</title>
-
+  <title>LabStudio CRJ Flexal - Agendamento</title>
+  
   <style>
-    body {
-      font-family: Arial;
-      background: #0f172a;
-      color: white;
-      text-align: center;
-      padding: 30px;
+    :root {
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f8fafc;
+      --input-bg: #334155;
+      --border: #475569;
     }
 
-    input, select, button {
-      padding: 10px;
-      margin: 10px;
-      width: 250px;
+    body {
+      font-family: 'Segoe UI', Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      background-color: var(--card-bg);
+      padding: 2rem;
+      border-radius: 1rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+      width: 100%;
+      max-width: 400px;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 2rem;
+      color: var(--primary);
+      font-size: 1.8rem;
+      letter-spacing: -1px;
+    }
+
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.6rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 0.8rem;
+      border-radius: 0.6rem;
+      border: 1px solid var(--border);
+      background-color: var(--input-bg);
+      color: white;
+      font-size: 1rem;
+      transition: all 0.2s ease;
+      outline: none;
+      box-sizing: border-box;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    }
+
+    button {
+      width: 100%;
+      padding: 1rem;
+      border: none;
+      border-radius: 0.6rem;
+      background-color: var(--primary);
+      color: white;
+      font-weight: bold;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-top: 1rem;
+    }
+
+    button:hover {
+      background-color: var(--primary-hover);
+    }
+
+    button:disabled {
+      background-color: var(--border);
+      cursor: not-allowed;
+    }
+
+    option {
+      background-color: var(--card-bg);
     }
   </style>
 </head>
+
 <body>
 
-<h1>LabStudio CRJ</h1>
+  <div class="container">
+    <h1>LabStudio CRJ</h1>
 
-<input type="text" id="nome" placeholder="Nome"><br>
-<input type="text" id="telefone" placeholder="WhatsApp (27999999999)"><br>
-<input type="date" id="data"><br>
+    <div class="form-group">
+      <label for="nome">Nome do Artista / Grupo</label>
+      <input type="text" id="nome" placeholder="Ex: MC Jovem">
+    </div>
 
-<select id="horario">
-  <option value="">Selecione a data</option>
-</select><br>
+    <div class="form-group">
+      <label for="telefone">WhatsApp</label>
+      <input type="text" id="telefone" placeholder="Ex: 27999999999">
+    </div>
 
-<button id="btn">Agendar</button>
+    <div class="form-group">
+      <label for="data">Data do Set</label>
+      <input type="date" id="data">
+    </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <div class="form-group">
+      <label for="horario">Horários Disponíveis</label>
+      <select id="horario">
+        <option value="">Selecione uma data primeiro</option>
+      </select>
+    </div>
 
-<script>
-const client = window.supabase.createClient(
-  "https://hblxvxgocemzctjbutgi.supabase.co",
-  "sb_publishable_12C1Wu47s3SuxqHZvQybdg_WubBGiQl"
-);
+    <button id="btn">Confirmar Agendamento</button>
+  </div>
 
-const horarios = ["14:00","15:00","16:00"];
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-const inputNome = document.getElementById("nome");
-const inputTel = document.getElementById("telefone");
-const inputData = document.getElementById("data");
-const selectHorario = document.getElementById("horario");
-const btn = document.getElementById("btn");
+  <script>
+    const client = window.supabase.createClient(
+      "https://hblxvxgocemzctjbutgi.supabase.co",
+      "sb_publishable_12C1Wu47s3SuxqHZvQybdg_WubBGiQl"
+    );
 
-// 🔥 carregar horários
-inputData.addEventListener("change", async () => {
-  const data = inputData.value;
-  if (!data) return;
+    const BOT_URL = "https://tightly-rubber-dyslexic.ngrok-free.dev";
 
-  selectHorario.innerHTML = "<option>Carregando...</option>";
+    // Funcionamento: somente terça e quinta
+    const horariosTerQui = ["18:00", "18:30"];
 
-  const { data: agendados } = await client
-    .from("agendamentos")
-    .select("horario")
-    .eq("data", data);
+    const datasBloqueadas = [
+      "2024-07-19",
+      "2024-05-01",
+      "2024-05-30"
+    ];
 
-  const ocupados = (agendados || []).map(i => i.horario);
+    const inputNome = document.getElementById("nome");
+    const inputTelefone = document.getElementById("telefone");
+    const inputData = document.getElementById("data");
+    const selectHorario = document.getElementById("horario");
+    const btnAgendar = document.getElementById("btn");
 
-  selectHorario.innerHTML = '<option value="">Escolha</option>';
+    inputData.addEventListener("change", async () => {
+      const dataSelecionada = inputData.value;
+      if (!dataSelecionada) return;
 
-  horarios.forEach(h => {
-    if (!ocupados.includes(h)) {
-      const opt = document.createElement("option");
-      opt.value = h;
-      opt.textContent = h;
-      selectHorario.appendChild(opt);
-    }
-  });
-});
+      const dataObjeto = new Date(dataSelecionada + "T12:00:00");
+      const diaSemana = dataObjeto.getDay();
 
-// 🔥 agendar
-btn.addEventListener("click", async () => {
-  const nome = inputNome.value.trim();
-  const telefone = inputTel.value.trim();
-  const data = inputData.value;
-  const horario = selectHorario.value;
+      // 0 domingo, 1 segunda, 2 terça, 3 quarta, 4 quinta, 5 sexta, 6 sábado
+      if (![2, 4].includes(diaSemana)) {
+        alert("O LabStudio funciona apenas às terças e quintas-feiras.");
+        inputData.value = "";
+        selectHorario.innerHTML = '<option value="">Dia indisponível</option>';
+        return;
+      }
 
-  if (!nome || !telefone || !data || !horario) {
-    alert("Preencha tudo");
-    return;
-  }
+      if (datasBloqueadas.includes(dataSelecionada)) {
+        alert("Esta data está reservada para evento interno ou feriado.");
+        inputData.value = "";
+        selectHorario.innerHTML = '<option value="">Dia indisponível</option>';
+        return;
+      }
 
-  btn.disabled = true;
-  btn.innerText = "Verificando...";
+      selectHorario.innerHTML = "<option>Consultando agenda...</option>";
 
-  try {
-    // verificar usuário
-    const { data: user } = await client
-      .from("usuarios")
-      .select("*")
-      .eq("telefone", telefone)
-      .maybeSingle();
+      const { data: agendados, error } = await client
+        .from("agendamentos")
+        .select("horario")
+        .eq("data", dataSelecionada);
 
-    if (!user) {
-      alert("Você precisa se cadastrar no CRJ.");
-      btn.disabled = false;
-      btn.innerText = "Agendar";
-      return;
-    }
+      if (error) {
+        alert("Erro ao buscar horários: " + error.message);
+        return;
+      }
 
-    if (user.faltas >= 2) {
-      alert("Você está bloqueado.");
-      btn.disabled = false;
-      btn.innerText = "Agendar";
-      return;
-    }
+      const ocupados = (agendados || []).map(item => String(item.horario).trim());
 
-    btn.innerText = "Agendando...";
+      selectHorario.innerHTML = '<option value="">Escolha o horário</option>';
 
-    await client
-      .from("agendamentos")
-      .insert([{ nome, telefone, data, horario }]);
+      horariosTerQui.forEach(hora => {
+        if (!ocupados.includes(hora)) {
+          const option = document.createElement("option");
+          option.value = hora;
+          option.textContent = hora;
+          selectHorario.appendChild(option);
+        }
+      });
 
-    // enviar pro bot
-    await fetch("https://tightly-rubber-dyslexic.ngrok-free.dev/notificar", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ nome, telefone, data, horario })
+      if (selectHorario.options.length === 1) {
+        selectHorario.innerHTML = '<option value="">Lotado para este dia</option>';
+      }
     });
 
-    alert("Agendado com sucesso!");
-    location.reload();
+    btnAgendar.addEventListener("click", async () => {
+      const nome = inputNome.value.trim();
+      const telefone = inputTelefone.value.trim();
+      const dataStr = inputData.value;
+      const horario = selectHorario.value;
 
-  } catch (err) {
-    alert("Erro: " + err.message);
-    btn.disabled = false;
-    btn.innerText = "Agendar";
-  }
-});
-</script>
+      if (!nome || !telefone || !dataStr || !horario) {
+        alert("Preencha todos os campos corretamente.");
+        return;
+      }
 
+      btnAgendar.disabled = true;
+      btnAgendar.innerText = "Agendando...";
+
+      try {
+        const { error } = await client
+          .from("agendamentos")
+          .insert([{ 
+            nome, 
+            telefone, 
+            data: dataStr, 
+            horario 
+          }]);
+
+        if (error) throw error;
+
+        try {
+          await fetch(`${BOT_URL}/notificar`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+              nome, 
+              telefone, 
+              data: dataStr, 
+              horario 
+            })
+          });
+        } catch (zapError) {
+          console.warn("Agendamento salvo, mas a notificação no WhatsApp falhou:", zapError);
+        }
+
+        alert(`Confirmado, ${nome}! 🔥\nTe esperamos dia ${dataStr} às ${horario}.`);
+        location.reload();
+
+      } catch (err) {
+        alert("Erro ao salvar: " + err.message);
+        btnAgendar.disabled = false;
+        btnAgendar.innerText = "Confirmar Agendamento";
+      }
+    });
+  </script>
 </body>
 </html>
