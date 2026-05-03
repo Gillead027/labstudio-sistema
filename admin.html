@@ -16,10 +16,12 @@
       --warning: #f59e0b;
       --bg: #0f172a;
       --card: #1e293b;
+      --card-strong: #162033;
       --text: #f8fafc;
       --muted: #94a3b8;
       --border: #475569;
       --input: #334155;
+      --shadow: 0 18px 45px rgba(0,0,0,0.32);
     }
 
     /* ===============================
@@ -27,7 +29,9 @@
     =============================== */
     body {
       font-family: 'Segoe UI', Roboto, sans-serif;
-      background: var(--bg);
+      background:
+        radial-gradient(circle at top left, rgba(99, 102, 241, 0.22), transparent 34rem),
+        linear-gradient(145deg, #020617 0%, var(--bg) 48%, #111827 100%);
       color: var(--text);
       margin: 0;
       padding: 20px;
@@ -36,6 +40,7 @@
     .container {
       max-width: 1100px;
       margin: 0 auto;
+      animation: entrarSuave 0.45s ease both;
     }
 
     h1 {
@@ -61,13 +66,14 @@
     }
 
     .login-card {
-      background: var(--card);
-      border: 1px solid rgba(255,255,255,0.08);
+      background: linear-gradient(180deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.96));
+      border: 1px solid rgba(148, 163, 184, 0.2);
       border-radius: 16px;
       padding: 28px;
       width: 100%;
       max-width: 380px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
+      animation: entrarSuave 0.4s ease both;
     }
 
     .login-card h1 {
@@ -83,7 +89,8 @@
 
     .login-erro {
       color: #fecaca;
-      background: #7f1d1d;
+      background: rgba(127, 29, 29, 0.75);
+      border: 1px solid rgba(239, 68, 68, 0.35);
       border-radius: 8px;
       padding: 10px;
       margin-top: 12px;
@@ -95,7 +102,7 @@
        ÁREA DE FILTROS
     =============================== */
     .filtros {
-      background: var(--card);
+      background: rgba(30, 41, 59, 0.82);
       padding: 20px;
       border-radius: 12px;
       margin-bottom: 20px;
@@ -103,6 +110,8 @@
       gap: 10px;
       flex-wrap: wrap;
       align-items: end;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      box-shadow: var(--shadow);
     }
 
     .grupo {
@@ -124,6 +133,15 @@
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 10px;
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: var(--primary);
+      background: #273449;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
     }
 
     button {
@@ -134,15 +152,20 @@
       font-weight: bold;
       color: white;
       background: var(--primary);
+      transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
     }
 
     button:hover {
       opacity: 0.9;
+      transform: translateY(-1px);
+      box-shadow: 0 10px 22px rgba(0,0,0,0.22);
     }
 
     button:disabled {
       opacity: 0.45;
       cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
     }
 
     .btn-presenca {
@@ -196,10 +219,12 @@
     }
 
     .bloco-resumo {
-      background: var(--card);
-      border: 1px solid rgba(255,255,255,0.05);
+      background: linear-gradient(180deg, rgba(30, 41, 59, 0.92), rgba(22, 32, 51, 0.92));
+      border: 1px solid rgba(148, 163, 184, 0.15);
       border-radius: 12px;
       padding: 16px;
+      box-shadow: var(--shadow);
+      animation: entrarSuave 0.35s ease both;
     }
 
     .bloco-resumo h3 {
@@ -226,11 +251,12 @@
     =============================== */
     .painel-pendencias,
     .painel-usuarios {
-      background: var(--card);
-      border: 1px solid rgba(255,255,255,0.05);
+      background: rgba(30, 41, 59, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.15);
       border-radius: 12px;
       padding: 16px;
       margin-bottom: 20px;
+      box-shadow: var(--shadow);
     }
 
     .pendencias-topo,
@@ -257,9 +283,19 @@
 
     .pendencia-item,
     .usuario-card {
-      border-top: 1px solid rgba(255,255,255,0.08);
-      padding-top: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 10px;
+      padding: 14px;
       margin-top: 12px;
+      background: rgba(15, 23, 42, 0.34);
+      transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+    }
+
+    .pendencia-item:hover,
+    .usuario-card:hover {
+      transform: translateY(-1px);
+      border-color: rgba(99, 102, 241, 0.38);
+      background: rgba(15, 23, 42, 0.48);
     }
 
     .pendencia-info,
@@ -291,11 +327,19 @@
        CARDS DE AGENDAMENTO
     =============================== */
     .card {
-      background: var(--card);
-      border: 1px solid rgba(255,255,255,0.05);
+      background: linear-gradient(180deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.86));
+      border: 1px solid rgba(148, 163, 184, 0.15);
       border-radius: 12px;
       padding: 16px;
       margin-bottom: 14px;
+      box-shadow: var(--shadow);
+      transition: transform 0.18s ease, border-color 0.18s ease;
+      animation: entrarSuave 0.3s ease both;
+    }
+
+    .card:hover {
+      transform: translateY(-1px);
+      border-color: rgba(99, 102, 241, 0.32);
     }
 
     .linha-topo {
@@ -379,10 +423,59 @@
 
     .vazio {
       color: var(--muted);
-      background: var(--card);
+      background: rgba(30, 41, 59, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.14);
       border-radius: 12px;
       padding: 20px;
       text-align: center;
+    }
+
+    /* ===============================
+       ANIMAÇÕES E RESPONSIVIDADE
+       Melhoram a leitura do painel em desktop e celular.
+    =============================== */
+    @keyframes entrarSuave {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 720px) {
+      body {
+        padding: 12px;
+      }
+
+      .filtros,
+      .acoes {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .grupo,
+      .filtros button,
+      .acoes button {
+        width: 100%;
+      }
+
+      input,
+      select,
+      button {
+        box-sizing: border-box;
+        width: 100%;
+      }
+
+      .login-card,
+      .painel-pendencias,
+      .painel-usuarios,
+      .card {
+        border-radius: 10px;
+      }
     }
   </style>
 </head>
@@ -514,6 +607,11 @@
         </div>
 
         <div class="grupo">
+          <label for="novaDataNascimento">Data de nascimento</label>
+          <input type="date" id="novaDataNascimento">
+        </div>
+
+        <div class="grupo">
           <label for="novoStatus">Status inicial</label>
           <select id="novoStatus">
             <option value="ativo">Ativo</option>
@@ -624,6 +722,7 @@
     // ===============================
     const novoNome = document.getElementById("novoNome");
     const novoTelefone = document.getElementById("novoTelefone");
+    const novaDataNascimento = document.getElementById("novaDataNascimento");
     const novoStatus = document.getElementById("novoStatus");
     const novoCadastrado = document.getElementById("novoCadastrado");
     const btnSalvarUsuario = document.getElementById("btnSalvarUsuario");
@@ -707,6 +806,68 @@
       const dataLimpa = String(data).split("T")[0];
       const [ano, mes, dia] = dataLimpa.split("-");
       return `${dia}/${mes}/${ano}`;
+    }
+
+    // ===============================
+    // FUNÇÃO: CALCULAR IDADE
+    // Usa a data de nascimento para aplicar a regra do CRJ.
+    // ===============================
+    function calcularIdade(dataNascimento) {
+      if (!dataNascimento) return null;
+
+      const partes = String(dataNascimento).split("T")[0].split("-");
+      if (partes.length !== 3) return null;
+
+      const [ano, mes, dia] = partes.map(Number);
+      const nascimento = new Date(ano, mes - 1, dia);
+
+      if (
+        Number.isNaN(nascimento.getTime()) ||
+        nascimento.getFullYear() !== ano ||
+        nascimento.getMonth() !== mes - 1 ||
+        nascimento.getDate() !== dia
+      ) {
+        return null;
+      }
+
+      const hoje = new Date();
+      let idade = hoje.getFullYear() - nascimento.getFullYear();
+      const aniversarioJaPassou =
+        hoje.getMonth() > nascimento.getMonth() ||
+        (hoje.getMonth() === nascimento.getMonth() && hoje.getDate() >= nascimento.getDate());
+
+      if (!aniversarioJaPassou) {
+        idade--;
+      }
+
+      return idade;
+    }
+
+    // ===============================
+    // FUNÇÃO: VALIDAR FAIXA ETÁRIA DO CRJ
+    // O CRJ atende jovens de 15 a 29 anos.
+    // ===============================
+    function idadePermitida(dataNascimento) {
+      const idade = calcularIdade(dataNascimento);
+      return idade !== null && idade >= 15 && idade <= 29;
+    }
+
+    // ===============================
+    // FUNÇÃO: MOSTRAR DATA DE NASCIMENTO E IDADE
+    // Usuários antigos podem aparecer com cadastro pendente.
+    // ===============================
+    function textoDataNascimento(usuario) {
+      if (!usuario.data_nascimento) {
+        return "Data de nascimento pendente";
+      }
+
+      const idade = calcularIdade(usuario.data_nascimento);
+
+      if (idade === null) {
+        return "Data de nascimento inválida";
+      }
+
+      return `${formatarData(usuario.data_nascimento)} (${idade} anos)`;
     }
 
     // ===============================
@@ -1039,16 +1200,26 @@
       const nome = novoNome.value.trim();
       const telefoneOriginal = novoTelefone.value.trim();
       const telefoneLimpo = limparTelefone(telefoneOriginal);
+      const dataNascimento = novaDataNascimento.value;
       const status = novoStatus.value;
       const cadastrado = novoCadastrado.value === "true";
 
-      if (!nome || !telefoneLimpo) {
-        alert("Preencha nome e telefone.");
+      if (!nome || !telefoneLimpo || !dataNascimento) {
+        alert("Preencha nome, telefone e data de nascimento.");
         return;
       }
 
       if (telefoneLimpo.length < 10) {
         alert("Telefone parece incompleto. Confira o número antes de salvar.");
+        return;
+      }
+
+      // ===============================
+      // VALIDAÇÃO DE IDADE
+      // O CRJ atende jovens de 15 a 29 anos.
+      // ===============================
+      if (!idadePermitida(dataNascimento)) {
+        alert("O CRJ atende jovens de 15 a 29 anos.");
         return;
       }
 
@@ -1078,6 +1249,7 @@
           .insert([{
             nome: nome,
             telefone: telefoneLimpo,
+            data_nascimento: dataNascimento,
             cadastrado: cadastrado,
             status: status,
             faltas: 0,
@@ -1096,6 +1268,7 @@
         // ===============================
         novoNome.value = "";
         novoTelefone.value = "";
+        novaDataNascimento.value = "";
         novoStatus.value = "ativo";
         novoCadastrado.value = "true";
 
@@ -1270,6 +1443,7 @@
           <div class="usuario-info">
             <strong>${escaparHtml(usuario.nome || "Sem nome")}</strong><br>
             📱 ${escaparHtml(usuario.telefone || "Não informado")}<br>
+            🎂 Nascimento: ${escaparHtml(textoDataNascimento(usuario))}<br>
             ⚠️ Faltas: ${Number(usuario.faltas || 0)}<br>
             ✅ Presenças: ${Number(usuario.presencas || 0)}<br>
             🚫 Status: ${escaparHtml(usuario.status || "-")}
@@ -1354,6 +1528,7 @@
 
           <div class="usuario-info">
             📱 Telefone: ${escaparHtml(usuario.telefone || "Não informado")}<br>
+            🎂 Nascimento: ${escaparHtml(textoDataNascimento(usuario))}<br>
             🧾 Cadastrado: ${estaCadastrado ? "Sim" : "Não"}<br>
             ✅ Presenças: ${Number(usuario.presencas || 0)}<br>
             ⚠️ Faltas: ${Number(usuario.faltas || 0)}<br>
@@ -1420,6 +1595,7 @@
     async function editarUsuario(usuario) {
       const nomeAtual = usuario.nome || "";
       const telefoneAtual = usuario.telefone || "";
+      const dataNascimentoAtual = usuario.data_nascimento || "";
       const statusAtual = String(usuario.status || "ativo").toLowerCase();
       const cadastradoAtual = usuario.cadastrado === true ? "sim" : "não";
       const faltasAtuais = Number(usuario.faltas || 0);
@@ -1435,6 +1611,9 @@
       const telefone = prompt("Telefone / WhatsApp:", telefoneAtual);
       if (telefone === null) return;
 
+      const dataNascimento = prompt("Data de nascimento (AAAA-MM-DD):", dataNascimentoAtual);
+      if (dataNascimento === null) return;
+
       const status = prompt('Status do usuário: digite "ativo" ou "bloqueado"', statusAtual);
       if (status === null) return;
 
@@ -1449,6 +1628,7 @@
 
       const nomeLimpo = nome.trim();
       const telefoneLimpo = limparTelefone(telefone);
+      const dataNascimentoLimpa = dataNascimento.trim();
       const statusLimpo = status.trim().toLowerCase();
       const cadastradoLimpo = cadastradoTexto.trim().toLowerCase();
       const faltasNumero = Number(faltasTexto);
@@ -1465,6 +1645,16 @@
 
       if (!telefoneLimpo) {
         alert("O telefone não pode ficar vazio.");
+        return;
+      }
+
+      if (!dataNascimentoLimpa) {
+        alert("A data de nascimento não pode ficar vazia.");
+        return;
+      }
+
+      if (!idadePermitida(dataNascimentoLimpa)) {
+        alert("O CRJ atende jovens de 15 a 29 anos.");
         return;
       }
 
@@ -1505,6 +1695,7 @@
           .update({
             nome: nomeLimpo,
             telefone: telefoneLimpo,
+            data_nascimento: dataNascimentoLimpa,
             status: statusLimpo,
             cadastrado: cadastradoLimpo === "sim",
             faltas: faltasNumero,

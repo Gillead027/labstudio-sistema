@@ -169,6 +169,50 @@ function gerarVariantesTelefone(valor) {
 }
 
 // ===============================
+// FUNÇÃO: CALCULAR IDADE
+// Usa a data de nascimento cadastrada no Supabase.
+// ===============================
+function calcularIdade(dataNascimento) {
+  if (!dataNascimento) return null;
+
+  const partes = String(dataNascimento).split("T")[0].split("-");
+  if (partes.length !== 3) return null;
+
+  const [ano, mes, dia] = partes.map(Number);
+  const nascimento = new Date(ano, mes - 1, dia);
+
+  if (
+    Number.isNaN(nascimento.getTime()) ||
+    nascimento.getFullYear() !== ano ||
+    nascimento.getMonth() !== mes - 1 ||
+    nascimento.getDate() !== dia
+  ) {
+    return null;
+  }
+
+  const hoje = new Date();
+  let idade = hoje.getFullYear() - nascimento.getFullYear();
+  const aniversarioJaPassou =
+    hoje.getMonth() > nascimento.getMonth() ||
+    (hoje.getMonth() === nascimento.getMonth() && hoje.getDate() >= nascimento.getDate());
+
+  if (!aniversarioJaPassou) {
+    idade--;
+  }
+
+  return idade;
+}
+
+// ===============================
+// FUNÇÃO: VALIDAR FAIXA ETÁRIA DO CRJ
+// O CRJ atende jovens de 15 a 29 anos.
+// ===============================
+function idadePermitida(dataNascimento) {
+  const idade = calcularIdade(dataNascimento);
+  return idade !== null && idade >= 15 && idade <= 29;
+}
+
+// ===============================
 // FUNÇÃO: BUSCAR USUÁRIO PELO WHATSAPP
 // Essa função:
 // 1. pega o número de quem mandou mensagem;
@@ -321,6 +365,40 @@ Após o cadastro, você poderá solicitar novamente o link de agendamento pelo W
     console.log("❌ Usuário não cadastrado.");
     console.log("📱 Telefones detectados:", telefonesDetectados);
     console.log("🔎 Variantes testadas:", variantesMensagem);
+
+    return;
+  }
+
+  // ===============================
+  // VERIFICAR DATA DE NASCIMENTO E IDADE
+  // Bloqueia antes de enviar o link quando o cadastro está incompleto.
+  // ===============================
+  if (!usuario.data_nascimento) {
+    await client.sendMessage(
+      msg.from,
+      `Olá, ${usuario.nome || "jovem"}.
+
+Seu cadastro precisa ser atualizado com a data de nascimento antes de acessar o agendamento do LabStudio.
+
+📍 Procure presencialmente a equipe do CRJ para atualizar seu cadastro.`
+    );
+
+    console.log(`⚠️ Usuário sem data de nascimento: ${usuario.nome} - ${usuario.telefone}`);
+
+    return;
+  }
+
+  if (!idadePermitida(usuario.data_nascimento)) {
+    await client.sendMessage(
+      msg.from,
+      `Olá, ${usuario.nome || "jovem"}.
+
+O LabStudio atende jovens de 15 a 29 anos.
+
+📍 Procure presencialmente a equipe do CRJ para mais orientações.`
+    );
+
+    console.log(`🚫 Usuário fora da faixa etária: ${usuario.nome} - ${usuario.telefone}`);
 
     return;
   }
