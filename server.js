@@ -3,6 +3,7 @@
 // ===============================
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 const { createClient } = require("@supabase/supabase-js");
@@ -16,6 +17,27 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+// ===============================
+// SERVIR ARQUIVOS DO SITE LOCALMENTE
+// Isso permite abrir index.html e admin.html pelo próprio servidor.
+// ===============================
+app.use(express.static(__dirname));
+
+// Página pública de agendamento
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+
+// Painel administrativo
+app.get("/admin.html", (req, res) => {
+  res.sendFile(path.join(__dirname, "admin.html"));
+});
+
+// Rota simples para testar se o servidor está online
+app.get("/health", (req, res) => {
+  res.send("🔥 BOT ONLINE");
+});
 
 // ===============================
 // CONEXÃO COM SUPABASE
@@ -355,9 +377,6 @@ Aguardamos você para realizar sua gravação! 🔥`;
 // http://localhost:3001
 // ou link do ngrok
 // ===============================
-app.get("/", (req, res) => {
-  res.send("🔥 BOT ONLINE");
-});
 
 // ===============================
 // ROTA /notificar
