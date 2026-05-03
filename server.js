@@ -1,6 +1,8 @@
 // ===============================
 // IMPORTAÇÕES PRINCIPAIS
 // ===============================
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
@@ -9,13 +11,65 @@ const qrcode = require("qrcode-terminal");
 const { createClient } = require("@supabase/supabase-js");
 
 // ===============================
+// CONFIGURAÇÕES VIA VARIÁVEIS DE AMBIENTE
+// Nunca coloque chaves, tokens ou números sensíveis direto no código.
+// ===============================
+const PORT = Number(process.env.PORT || 3001);
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const BOT_NOTIFY_NUMBER = process.env.BOT_NOTIFY_NUMBER;
+const PUBLIC_SITE_URL = String(process.env.PUBLIC_SITE_URL || "").replace(/\/$/, "");
+const ALLOWED_ORIGINS = String(process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map(origem => origem.trim())
+  .filter(Boolean);
+
+const ORIGENS_PADRAO_DESENVOLVIMENTO = [
+  `http://localhost:${PORT}`,
+  `http://127.0.0.1:${PORT}`
+];
+
+const origensPermitidas = new Set([
+  ...ORIGENS_PADRAO_DESENVOLVIMENTO,
+  ...ALLOWED_ORIGINS,
+  ...(PUBLIC_SITE_URL ? [PUBLIC_SITE_URL] : [])
+]);
+
+function exigirVariavelAmbiente(nome, valor) {
+  if (!valor) {
+    console.error(`❌ Variável de ambiente obrigatória ausente: ${nome}`);
+    process.exit(1);
+  }
+}
+
+exigirVariavelAmbiente("SUPABASE_URL", SUPABASE_URL);
+exigirVariavelAmbiente("SUPABASE_ANON_KEY", SUPABASE_ANON_KEY);
+exigirVariavelAmbiente("BOT_NOTIFY_NUMBER", BOT_NOTIFY_NUMBER);
+exigirVariavelAmbiente("PUBLIC_SITE_URL", PUBLIC_SITE_URL);
+
+// ===============================
 // CONFIGURAÇÃO DO SERVIDOR EXPRESS
 // Esse servidor recebe requisições do site
 // Exemplo: POST /notificar
 // ===============================
 const app = express();
 
-app.use(cors());
+// ===============================
+// CONFIGURAÇÃO DE CORS
+// Permite localhost no desenvolvimento e as origens definidas no .env.
+// Requisições sem Origin, como curl ou chamadas locais diretas, continuam liberadas.
+// ===============================
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || origensPermitidas.has(origin)) {
+      return callback(null, true);
+    }
+
+    console.warn(`⚠️ Origem bloqueada pelo CORS: ${origin}`);
+    return callback(null, false);
+  }
+}));
+
 app.use(express.json());
 
 // ===============================
@@ -49,8 +103,8 @@ app.get("/health", (req, res) => {
 // Aqui o bot consegue consultar a tabela "usuarios"
 // ===============================
 const supabase = createClient(
-  "https://hblxvxgocemzctjbutgi.supabase.co",
-  "sb_publishable_12C1Wu47s3SuxqHZvQybdg_WubBGiQl"
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY
 );
 
 // ===============================
@@ -279,6 +333,8 @@ async function buscarUsuarioPorWhatsApp(msg) {
     .select("*");
 
   if (error) {
+    console.error("❌ Falha ao consultar usuários no Supabase:", error.message);
+
     return {
       usuario: null,
       telefonesDetectados,
@@ -319,6 +375,7 @@ async function buscarUsuarioPorWhatsApp(msg) {
 // Detecta palavras-chave e decide se envia o link
 // ===============================
 client.on("message", async (msg) => {
+  try {
   // Ignora mensagens enviadas pelo próprio bot
   if (msg.fromMe) return;
 
@@ -377,7 +434,7 @@ client.on("message", async (msg) => {
 Identificamos que este número ainda não consta em nosso cadastro.
 
 Você pode realizar seu cadastro online pelo link abaixo:
-https://labstudio-sistema.vercel.app/cadastro.html
+${PUBLIC_SITE_URL}/cadastro.html
 
 Após o envio, aguarde a análise da equipe do CRJ.`
     );
@@ -463,7 +520,7 @@ O LabStudio atende jovens de 15 a 29 anos.
 Identificamos que você tem interesse em utilizar nossos serviços de estúdio. Para garantir a organização e o acesso de todos, nossos agendamentos são realizados exclusivamente através do nosso portal oficial.
 
 📍 Para agendar sua sessão, acesse o link abaixo:
-https://labstudio-sistema.vercel.app/
+${PUBLIC_SITE_URL}/
 
 Orientações importantes:
 1. Selecione a data e o horário desejados.
@@ -477,6 +534,20 @@ Aguardamos você para realizar sua gravação! 🔥`;
   console.log(
     `✅ Auto-resposta enviada para usuário cadastrado: ${usuario.nome} - ${usuario.telefone}`
   );
+  } catch (err) {
+    console.error("❌ Erro inesperado ao processar mensagem do WhatsApp:", err);
+
+    try {
+      if (msg && msg.from) {
+        await client.sendMessage(
+          msg.from,
+          "No momento tive um problema ao processar sua mensagem. Tente novamente mais tarde ou procure a equipe do CRJ."
+        );
+      }
+    } catch (sendError) {
+      console.error("❌ Falha ao enviar mensagem de erro pelo WhatsApp:", sendError);
+    }
+  }
 });
 
 // ===============================
@@ -508,7 +579,7 @@ Data: ${data}
 Horário: ${horario}`;
 
   // Número B que vai receber os avisos
-  const numeroB = "5527996509068@c.us";
+  const numeroB = formatarDestinoWhatsApp(BOT_NOTIFY_NUMBER);
 
   try {
     if (!botPronto) {
@@ -544,7 +615,7 @@ app.post("/notificar-aprovacao", async (req, res) => {
 Seu cadastro no LabStudio CRJ FLEXAL foi aprovado pela equipe do CRJ.
 
 Agora você já pode solicitar seu agendamento pelo link abaixo:
-https://labstudio-sistema.vercel.app/
+${PUBLIC_SITE_URL}/
 
 Aguardamos você para realizar sua gravação! 🔥`;
 
@@ -571,10 +642,9 @@ client.initialize();
 
 // ===============================
 // INICIALIZA O SERVIDOR LOCAL
-// Porta 3001
-// O ngrok precisa apontar para essa porta:
-// ngrok http 3001
+// A porta vem do .env. Por padrão, use PORT=3001.
+// O ngrok precisa apontar para a mesma porta configurada.
 // ===============================
-app.listen(3001, () => {
-  console.log("🚀 Servidor rodando na porta 3001");
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
