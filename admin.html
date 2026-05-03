@@ -165,8 +165,17 @@
       margin-bottom: 20px;
     }
 
+    .pendencias-topo {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
     .painel-pendencias h2 {
-      margin-top: 0;
+      margin: 0;
       color: var(--warning);
       font-size: 1.2rem;
     }
@@ -249,6 +258,7 @@
       border-radius: 8px;
       margin-bottom: 14px;
       line-height: 1.5;
+      white-space: pre-line;
     }
 
     .acoes {
@@ -306,11 +316,20 @@
 
     <!-- ===============================
          PAINEL DE PENDÊNCIAS
-         Mostra agendamentos antigos que ainda estão como "agendado"
+         Agora tem botão para processar faltas pendentes com segurança.
     =============================== -->
-    <div id="painelPendencias" class="painel-pendencias">
-      <h2>⚠️ Pendências de verificação</h2>
-      <div class="vazio">Carregando pendências...</div>
+    <div class="painel-pendencias">
+      <div class="pendencias-topo">
+        <h2>⚠️ Pendências de verificação</h2>
+
+        <button id="btnProcessarPendencias" class="btn-falta">
+          Processar faltas pendentes
+        </button>
+      </div>
+
+      <div id="conteudoPendencias">
+        <div class="vazio">Carregando pendências...</div>
+      </div>
     </div>
 
     <!-- ===============================
@@ -338,11 +357,12 @@
     // ===============================
     const lista = document.getElementById("listaAgendamentos");
     const painelResumo = document.getElementById("painelResumo");
-    const painelPendencias = document.getElementById("painelPendencias");
+    const conteudoPendencias = document.getElementById("conteudoPendencias");
     const filtroData = document.getElementById("filtroData");
     const filtroStatus = document.getElementById("filtroStatus");
     const btnFiltrar = document.getElementById("btnFiltrar");
     const btnLimpar = document.getElementById("btnLimpar");
+    const btnProcessarPendencias = document.getElementById("btnProcessarPendencias");
 
     // ===============================
     // FUNÇÃO: ESCAPAR TEXTO
@@ -486,7 +506,7 @@
 
     // ===============================
     // FUNÇÃO: VERIFICAR SE UM AGENDAMENTO JÁ PASSOU
-    // Usada para listar pendências
+    // Usada para listar pendências comuns
     // ===============================
     function agendamentoJaPassou(data, horario) {
       if (!data || !horario) return false;
@@ -498,6 +518,30 @@
       const agora = new Date();
 
       return dataHoraAgendada < agora;
+    }
+
+    // ===============================
+    // FUNÇÃO: VERIFICAR SE UM AGENDAMENTO PASSOU HÁ MAIS DE 24H
+    //
+    // Essa é a regra segura para o botão:
+    // "Processar faltas pendentes".
+    //
+    // Só processa automaticamente se:
+    // horário do agendamento + 24h < agora
+    // ===============================
+    function agendamentoPassouMaisDe24h(data, horario) {
+      if (!data || !horario) return false;
+
+      const dataLimpa = String(data).split("T")[0];
+      const horarioLimpo = String(horario).slice(0, 5);
+
+      const dataHoraAgendada = new Date(`${dataLimpa}T${horarioLimpo}:00`);
+      const agora = new Date();
+
+      const vinteQuatroHoras = 24 * 60 * 60 * 1000;
+      const diferenca = agora - dataHoraAgendada;
+
+      return diferenca > vinteQuatroHoras;
     }
 
     // ===============================
@@ -614,6 +658,11 @@
         agendamentoJaPassou(item.data, item.horario)
       ).length;
 
+      const totalPendentes24h = listaAgendamentos.filter(item =>
+        (item.status || "agendado") === "agendado" &&
+        agendamentoPassouMaisDe24h(item.data, item.horario)
+      ).length;
+
       const totalBloqueados = listaUsuarios.filter(user =>
         String(user.status || "").toLowerCase() === "bloqueado"
       ).length;
@@ -641,6 +690,7 @@
           <div class="item-ranking">Faltaram: ${totalFaltaram}</div>
           <div class="item-ranking">Cancelados: ${totalCancelados}</div>
           <div class="item-ranking">Pendentes: ${totalPendentes}</div>
+          <div class="item-ranking">Pendentes +24h: ${totalPendentes24h}</div>
         </div>
 
         <div class="bloco-resumo">
@@ -692,10 +742,7 @@
     // Assim você decide manualmente se compareceu, faltou ou cancelou.
     // ===============================
     async function carregarPendencias() {
-      painelPendencias.innerHTML = `
-        <h2>⚠️ Pendências de verificação</h2>
-        <div class="vazio">Carregando pendências...</div>
-      `;
+      conteudoPendencias.innerHTML = '<div class="vazio">Carregando pendências...</div>';
 
       const { data, error } = await client
         .from("agendamentos")
@@ -705,10 +752,7 @@
         .order("horario", { ascending: true });
 
       if (error) {
-        painelPendencias.innerHTML = `
-          <h2>⚠️ Pendências de verificação</h2>
-          <div class="vazio">Erro ao carregar pendências: ${error.message}</div>
-        `;
+        conteudoPendencias.innerHTML = `<div class="vazio">Erro ao carregar pendências: ${error.message}</div>`;
         return;
       }
 
@@ -717,15 +761,11 @@
       );
 
       if (pendencias.length === 0) {
-        painelPendencias.innerHTML = `
-          <h2>⚠️ Pendências de verificação</h2>
-          <div class="vazio">Nenhuma pendência no momento.</div>
-        `;
+        conteudoPendencias.innerHTML = '<div class="vazio">Nenhuma pendência no momento.</div>';
         return;
       }
 
-      painelPendencias.innerHTML = `
-        <h2>⚠️ Pendências de verificação</h2>
+      conteudoPendencias.innerHTML = `
         <div class="item-ranking">
           Existem ${pendencias.length} agendamento(s) antigo(s) ainda sem confirmação.
         </div>
@@ -735,11 +775,14 @@
         const item = document.createElement("div");
         item.className = "pendencia-item";
 
+        const pendente24h = agendamentoPassouMaisDe24h(agendamento.data, agendamento.horario);
+
         item.innerHTML = `
           <div class="pendencia-info">
             <strong>${escaparHtml(agendamento.nome || "Sem nome")}</strong><br>
             📱 ${escaparHtml(agendamento.telefone || "Não informado")}<br>
-            📅 ${formatarData(agendamento.data)} às ${escaparHtml(agendamento.horario || "-")}
+            📅 ${formatarData(agendamento.data)} às ${escaparHtml(agendamento.horario || "-")}<br>
+            ${pendente24h ? "⏳ Pendente há mais de 24h" : "🕒 Pendente recente"}
           </div>
 
           <div class="acoes">
@@ -765,7 +808,7 @@
           cancelarAgendamento(agendamento.id);
         });
 
-        painelPendencias.appendChild(item);
+        conteudoPendencias.appendChild(item);
       });
     }
 
@@ -1003,6 +1046,97 @@
     }
 
     // ===============================
+    // FUNÇÃO: PROCESSAR FALTAS PENDENTES
+    //
+    // Esse botão pega agendamentos:
+    // - status = agendado
+    // - horário passou há mais de 24h
+    //
+    // E marca como falta automaticamente.
+    // ===============================
+    async function processarFaltasPendentes() {
+      const confirmar = confirm(
+        "Processar automaticamente faltas pendentes?\n\nSó serão marcados como falta os agendamentos que passaram há mais de 24 horas e ainda estão como agendados."
+      );
+
+      if (!confirmar) return;
+
+      btnProcessarPendencias.disabled = true;
+      btnProcessarPendencias.innerText = "Processando...";
+
+      try {
+        const { data, error } = await client
+          .from("agendamentos")
+          .select("*")
+          .eq("status", "agendado");
+
+        if (error) {
+          alert("Erro ao buscar pendências: " + error.message);
+          return;
+        }
+
+        const pendencias24h = (data || []).filter(item =>
+          agendamentoPassouMaisDe24h(item.data, item.horario)
+        );
+
+        if (pendencias24h.length === 0) {
+          alert("Nenhuma pendência com mais de 24h para processar.");
+          return;
+        }
+
+        let processados = 0;
+        let ignorados = 0;
+
+        for (const agendamento of pendencias24h) {
+          const usuarioAtualizado = await atualizarContadoresUsuario(
+            agendamento.telefone,
+            0,
+            1
+          );
+
+          if (!usuarioAtualizado) {
+            ignorados++;
+            continue;
+          }
+
+          const observacaoAnterior = agendamento.observacao
+            ? `${agendamento.observacao}\n`
+            : "";
+
+          const observacaoAutomatica =
+            `${observacaoAnterior}Falta processada automaticamente pelo painel após mais de 24h pendente.`;
+
+          const { error: erroAgenda } = await client
+            .from("agendamentos")
+            .update({
+              status: "faltou",
+              observacao: observacaoAutomatica
+            })
+            .eq("id", agendamento.id)
+            .eq("status", "agendado");
+
+          if (erroAgenda) {
+            console.warn("Erro ao atualizar agendamento:", erroAgenda.message);
+            ignorados++;
+            continue;
+          }
+
+          processados++;
+        }
+
+        alert(`Processamento concluído!\n\nFaltas processadas: ${processados}\nIgnorados: ${ignorados}`);
+
+        recarregarPainel();
+
+      } catch (err) {
+        alert("Erro ao processar pendências: " + err.message);
+      } finally {
+        btnProcessarPendencias.disabled = false;
+        btnProcessarPendencias.innerText = "Processar faltas pendentes";
+      }
+    }
+
+    // ===============================
     // FUNÇÃO: CANCELAR AGENDAMENTO
     //
     // Agora o cancelamento exige motivo.
@@ -1075,6 +1209,13 @@
       filtroData.value = "";
       filtroStatus.value = "";
       recarregarPainel();
+    });
+
+    // ===============================
+    // BOTÃO: PROCESSAR FALTAS PENDENTES
+    // ===============================
+    btnProcessarPendencias.addEventListener("click", () => {
+      processarFaltasPendentes();
     });
 
     // ===============================
