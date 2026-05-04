@@ -1024,6 +1024,6 @@ client.initialize();
 // A porta vem do .env. Por padrão, use PORT=3001.
 // O ngrok precisa apontar para a mesma porta configurada.
 // ===============================
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
