@@ -16,7 +16,7 @@ const { createClient } = require("@supabase/supabase-js");
 // ===============================
 const PORT = Number(process.env.PORT || 3001);
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const BOT_NOTIFY_NUMBER = process.env.BOT_NOTIFY_NUMBER;
 const PUBLIC_SITE_URL = String(process.env.PUBLIC_SITE_URL || "").replace(/\/$/, "");
 const ALLOWED_ORIGINS = String(process.env.ALLOWED_ORIGINS || "")
@@ -43,7 +43,7 @@ function exigirVariavelAmbiente(nome, valor) {
 }
 
 exigirVariavelAmbiente("SUPABASE_URL", SUPABASE_URL);
-exigirVariavelAmbiente("SUPABASE_ANON_KEY", SUPABASE_ANON_KEY);
+exigirVariavelAmbiente("SUPABASE_SERVICE_ROLE_KEY", SUPABASE_SERVICE_ROLE_KEY);
 exigirVariavelAmbiente("BOT_NOTIFY_NUMBER", BOT_NOTIFY_NUMBER);
 exigirVariavelAmbiente("PUBLIC_SITE_URL", PUBLIC_SITE_URL);
 
@@ -100,12 +100,25 @@ app.get("/health", (req, res) => {
 
 // ===============================
 // CONEXÃO COM SUPABASE
-// Aqui o bot consegue consultar a tabela "usuarios"
+// Operações internas do servidor usam a service role.
+// Nunca exponha SUPABASE_SERVICE_ROLE_KEY em arquivos HTML ou no navegador.
 // ===============================
 const supabase = createClient(
   SUPABASE_URL,
-  SUPABASE_ANON_KEY
+  SUPABASE_SERVICE_ROLE_KEY
 );
+
+// ===============================
+// REGRAS PÚBLICAS DE AGENDAMENTO
+// Mantidas também no servidor para preparar o RLS sem depender do frontend.
+// ===============================
+const HORARIOS_TERCA_QUINTA = ["18:00", "18:30"];
+
+const DATAS_BLOQUEADAS = [
+  "2024-07-19",
+  "2024-05-01",
+  "2024-05-30"
+];
 
 // ===============================
 // CONFIGURAÇÃO DO CLIENTE WHATSAPP
@@ -170,17 +183,32 @@ function limparTelefone(valor) {
 }
 
 // ===============================
-// FUNÇÃO: FORMATAR DESTINO DO WHATSAPP
-// Garante o formato usado pelo whatsapp-web.js.
+// FUNÇÃO: NORMALIZAR NÚMERO DO WHATSAPP
+// Aceita número puro ou número já terminado em @c.us.
 // ===============================
-function formatarDestinoWhatsApp(telefone) {
-  const numero = limparTelefone(telefone);
+function normalizarNumeroWhatsApp(telefone) {
+  const valorOriginal = String(telefone || "").trim();
+  const semSufixo = valorOriginal.replace(/@c\.us$/i, "");
+  const numero = limparTelefone(semSufixo);
 
   if (!numero) return "";
 
+  // Mantém compatibilidade com números locais digitados sem o código do Brasil.
   const numeroComPais = numero.startsWith("55") ? numero : "55" + numero;
 
   return `${numeroComPais}@c.us`;
+}
+
+// ===============================
+// FUNÇÃO: MASCARAR NÚMERO PARA LOG
+// Ajuda a depurar sem expor o telefone completo no terminal.
+// ===============================
+function mascararNumeroWhatsApp(destino) {
+  const numero = limparTelefone(destino);
+
+  if (numero.length <= 4) return destino || "não informado";
+
+  return `***${numero.slice(-4)}@c.us`;
 }
 
 // ===============================
@@ -286,6 +314,117 @@ function idadePermitida(dataNascimento) {
 }
 
 // ===============================
+// FUNÇÃO: VALIDAR DATA DE AGENDAMENTO
+// Garante no servidor as mesmas regras de terça/quinta e datas bloqueadas.
+// ===============================
+function validarDataAgendamento(dataSelecionada) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dataSelecionada || ""))) {
+    return {
+      ok: false,
+      mensagem: "Informe uma data válida para o agendamento."
+    };
+  }
+
+  const dataObjeto = new Date(`${dataSelecionada}T12:00:00`);
+
+  if (Number.isNaN(dataObjeto.getTime())) {
+    return {
+      ok: false,
+      mensagem: "Informe uma data válida para o agendamento."
+    };
+  }
+
+  const diaSemana = dataObjeto.getDay();
+
+  if (![2, 4].includes(diaSemana)) {
+    return {
+      ok: false,
+      mensagem: "O LabStudio funciona apenas às terças e quintas-feiras."
+    };
+  }
+
+  if (DATAS_BLOQUEADAS.includes(dataSelecionada)) {
+    return {
+      ok: false,
+      mensagem: "Esta data está reservada para evento interno ou feriado."
+    };
+  }
+
+  return { ok: true };
+}
+
+// ===============================
+// FUNÇÃO: BUSCAR USUÁRIO POR TELEFONE
+// Usa a service role no servidor para comparar variações com/sem 55 e nono dígito.
+// ===============================
+async function buscarUsuarioPorTelefone(telefone) {
+  const variantesDigitadas = gerarVariantesTelefone(telefone);
+
+  if (variantesDigitadas.length === 0) {
+    return {
+      usuario: null,
+      variantesDigitadas
+    };
+  }
+
+  const { data: usuarios, error } = await supabase
+    .from("usuarios")
+    .select("*");
+
+  if (error) {
+    console.error("❌ Falha ao consultar usuários no Supabase:", error.message);
+    throw error;
+  }
+
+  const usuarioEncontrado = (usuarios || []).find((usuario) => {
+    const variantesBanco = gerarVariantesTelefone(usuario.telefone);
+
+    return variantesBanco.some((numeroBanco) =>
+      variantesDigitadas.includes(numeroBanco)
+    );
+  });
+
+  return {
+    usuario: usuarioEncontrado || null,
+    variantesDigitadas
+  };
+}
+
+// ===============================
+// FUNÇÃO: BUSCAR HORÁRIOS OCUPADOS
+// Agendamentos cancelados não bloqueiam o horário.
+// ===============================
+async function buscarHorariosOcupados(dataSelecionada) {
+  const { data: agendados, error } = await supabase
+    .from("agendamentos")
+    .select("horario, status")
+    .eq("data", dataSelecionada)
+    .neq("status", "cancelado");
+
+  if (error) {
+    console.error("❌ Falha ao consultar horários no Supabase:", error.message);
+    throw error;
+  }
+
+  return (agendados || []).map((item) => String(item.horario || "").trim());
+}
+
+// ===============================
+// FUNÇÃO: RESPOSTA DE ERRO PADRÃO DA API
+// Mantém retornos JSON claros para as telas públicas.
+// ===============================
+function responderErroApi(res, status, mensagem, detalhes = null) {
+  if (detalhes) {
+    console.error("❌ Detalhes da API:", detalhes.message || detalhes);
+  }
+
+  return res.status(status).json({
+    ok: false,
+    mensagem
+  });
+}
+
+// ===============================
 // FUNÇÃO: BUSCAR USUÁRIO PELO WHATSAPP
 // Essa função:
 // 1. pega o número de quem mandou mensagem;
@@ -369,6 +508,221 @@ async function buscarUsuarioPorWhatsApp(msg) {
     error: null
   };
 }
+
+// ===============================
+// API PÚBLICA: HORÁRIOS DISPONÍVEIS
+// O frontend consulta esta rota em vez de acessar agendamentos direto no Supabase.
+// ===============================
+app.get("/api/horarios", async (req, res) => {
+  const dataSelecionada = String(req.query.data || "").trim();
+  const validacaoData = validarDataAgendamento(dataSelecionada);
+
+  if (!validacaoData.ok) {
+    return responderErroApi(res, 400, validacaoData.mensagem);
+  }
+
+  try {
+    const ocupados = await buscarHorariosOcupados(dataSelecionada);
+    const horariosDisponiveis = HORARIOS_TERCA_QUINTA.filter((hora) =>
+      !ocupados.includes(hora)
+    );
+
+    return res.json({
+      ok: true,
+      data: dataSelecionada,
+      ocupados,
+      horarios: horariosDisponiveis,
+      horariosDisponiveis
+    });
+  } catch (err) {
+    return responderErroApi(
+      res,
+      500,
+      "Erro ao consultar horários disponíveis.",
+      err
+    );
+  }
+});
+
+// ===============================
+// API PÚBLICA: CRIAR AGENDAMENTO
+// Centraliza validação de cadastro, idade, faltas, status e horário ocupado.
+// ===============================
+app.post("/api/agendar", async (req, res) => {
+  const nome = String(req.body.nome || "").trim();
+  const telefoneLimpo = limparTelefone(req.body.telefone);
+  const dataSelecionada = String(req.body.data || "").trim();
+  const horario = String(req.body.horario || "").trim();
+
+  if (!nome || !telefoneLimpo || !dataSelecionada || !horario) {
+    return responderErroApi(res, 400, "Preencha todos os campos corretamente.");
+  }
+
+  const validacaoData = validarDataAgendamento(dataSelecionada);
+
+  if (!validacaoData.ok) {
+    return responderErroApi(res, 400, validacaoData.mensagem);
+  }
+
+  if (!HORARIOS_TERCA_QUINTA.includes(horario)) {
+    return responderErroApi(res, 400, "Horário inválido para esta agenda.");
+  }
+
+  try {
+    const { usuario } = await buscarUsuarioPorTelefone(telefoneLimpo);
+
+    if (!usuario || usuario.cadastrado === false) {
+      return responderErroApi(
+        res,
+        403,
+        "⚠️ Você precisa estar cadastrado no CRJ antes de agendar. Procure a equipe presencialmente."
+      );
+    }
+
+    if (!usuario.data_nascimento) {
+      return responderErroApi(
+        res,
+        403,
+        "Seu cadastro precisa ser atualizado com a data de nascimento. Procure a equipe do CRJ."
+      );
+    }
+
+    if (!idadePermitida(usuario.data_nascimento)) {
+      return responderErroApi(
+        res,
+        403,
+        "O LabStudio atende jovens de 15 a 29 anos. Procure a equipe do CRJ."
+      );
+    }
+
+    const statusUsuario = String(usuario.status || "").toLowerCase();
+    const faltasUsuario = Number(usuario.faltas || 0);
+
+    if (statusUsuario === "bloqueado" || faltasUsuario >= 2) {
+      return responderErroApi(
+        res,
+        403,
+        "🚫 Você está bloqueado por faltas. Procure a equipe do CRJ para regularizar sua situação."
+      );
+    }
+
+    if (statusUsuario && statusUsuario !== "ativo") {
+      return responderErroApi(
+        res,
+        403,
+        "Seu cadastro ainda não está ativo para agendamento. Procure a equipe do CRJ."
+      );
+    }
+
+    const ocupados = await buscarHorariosOcupados(dataSelecionada);
+
+    if (ocupados.includes(horario)) {
+      return responderErroApi(
+        res,
+        409,
+        "Este horário acabou de ser ocupado. Escolha outro horário."
+      );
+    }
+
+    const { data: agendamentoCriado, error } = await supabase
+      .from("agendamentos")
+      .insert([{
+        nome,
+        telefone: telefoneLimpo,
+        data: dataSelecionada,
+        horario,
+        status: "agendado"
+      }])
+      .select("id, nome, telefone, data, horario, status")
+      .single();
+
+    if (error) {
+      return responderErroApi(res, 500, "Erro ao salvar agendamento.", error);
+    }
+
+    return res.json({
+      ok: true,
+      mensagem: `Confirmado, ${nome}! 🔥\nTe esperamos dia ${dataSelecionada} às ${horario}.`,
+      agendamento: agendamentoCriado
+    });
+  } catch (err) {
+    return responderErroApi(res, 500, "Erro ao processar agendamento.", err);
+  }
+});
+
+// ===============================
+// API PÚBLICA: CADASTRO ONLINE
+// Salva solicitações públicas como pendentes usando service role somente no servidor.
+// ===============================
+app.post("/api/cadastro-online", async (req, res) => {
+  const nome = String(req.body.nome || "").trim();
+  const telefoneLimpo = limparTelefone(req.body.telefone);
+  const dataNascimento = String(req.body.data_nascimento || req.body.dataNascimento || "").trim();
+
+  if (!nome || !telefoneLimpo || !dataNascimento) {
+    return responderErroApi(
+      res,
+      400,
+      "Preencha nome completo, WhatsApp e data de nascimento."
+    );
+  }
+
+  if (!idadePermitida(dataNascimento)) {
+    return responderErroApi(res, 400, "O CRJ atende jovens de 15 a 29 anos.");
+  }
+
+  try {
+    const { usuario: usuarioExistente } = await buscarUsuarioPorTelefone(telefoneLimpo);
+
+    if (usuarioExistente) {
+      const statusExistente = String(usuarioExistente.status || "").toLowerCase();
+      const origemCadastro = String(usuarioExistente.origem_cadastro || "").toLowerCase();
+
+      if (
+        statusExistente === "pendente" ||
+        (usuarioExistente.cadastrado === false && origemCadastro === "online")
+      ) {
+        return responderErroApi(
+          res,
+          409,
+          "Seu cadastro online já foi enviado e está aguardando análise da equipe."
+        );
+      }
+
+      return responderErroApi(
+        res,
+        409,
+        "Este número já possui cadastro. Chame o atendimento pelo WhatsApp para continuar."
+      );
+    }
+
+    const { error } = await supabase
+      .from("usuarios")
+      .insert([{
+        nome,
+        telefone: telefoneLimpo,
+        data_nascimento: dataNascimento,
+        cadastrado: false,
+        status: "pendente",
+        faltas: 0,
+        presencas: 0,
+        origem_cadastro: "online",
+        cadastro_online_em: new Date().toISOString(),
+        observacao: "Cadastro realizado online"
+      }]);
+
+    if (error) {
+      return responderErroApi(res, 500, "Erro ao enviar cadastro.", error);
+    }
+
+    return res.json({
+      ok: true,
+      mensagem: "Cadastro enviado com sucesso! A equipe do CRJ irá analisar seus dados. Após aprovação, você poderá solicitar o agendamento pelo WhatsApp."
+    });
+  } catch (err) {
+    return responderErroApi(res, 500, "Erro ao processar cadastro online.", err);
+  }
+});
 
 // ===============================
 // AUTOATENDIMENTO DO WHATSAPP
@@ -565,10 +919,24 @@ Aguardamos você para realizar sua gravação! 🔥`;
 // ===============================
 app.post("/notificar", async (req, res) => {
   const { nome, telefone, data, horario } = req.body;
+  const numeroB = normalizarNumeroWhatsApp(BOT_NOTIFY_NUMBER);
 
   console.log(
     `📥 Novo agendamento recebido: ${nome} - ${telefone} - ${data} às ${horario}`
   );
+
+  console.log(`📥 /notificar recebeu dados: nome=${nome || "sem nome"}, data=${data || "sem data"}, horario=${horario || "sem horário"}`);
+  console.log(`📲 Destino de notificação configurado: ${mascararNumeroWhatsApp(numeroB)}`);
+
+  if (!numeroB) {
+    console.error("❌ BOT_NOTIFY_NUMBER ausente ou inválido no .env.");
+
+    return res.status(500).json({
+      status: "erro",
+      erro: "numero_notificacao_invalido",
+      mensagem: "BOT_NOTIFY_NUMBER ausente ou inválido no servidor."
+    });
+  }
 
   // Mensagem que chega no seu WhatsApp pessoal/trabalho
   const mensagem = `🚀 NOVO AGENDAMENTO
@@ -578,22 +946,33 @@ Telefone: ${telefone}
 Data: ${data}
 Horário: ${horario}`;
 
-  // Número B que vai receber os avisos
-  const numeroB = formatarDestinoWhatsApp(BOT_NOTIFY_NUMBER);
-
+  // Envia a mensagem para o número configurado no .env.
   try {
     if (!botPronto) {
-      console.log("⚠️ Bot ainda não está pronto para enviar mensagem.");
-      return res.status(503).json({ erro: "bot_nao_pronto" });
+      console.warn("⚠️ Bot ainda não está pronto para enviar notificação.");
+
+      return res.status(503).json({
+        status: "erro",
+        erro: "bot_nao_pronto",
+        mensagem: "WhatsApp ainda não está pronto para enviar mensagens."
+      });
     }
 
     await client.sendMessage(numeroB, mensagem);
 
-    console.log("✅ Mensagem enviada para o seu celular!");
-    res.json({ status: "enviado" });
+    console.log(`✅ Notificação enviada com sucesso para ${mascararNumeroWhatsApp(numeroB)}.`);
+    res.json({
+      status: "enviado",
+      destino: mascararNumeroWhatsApp(numeroB)
+    });
   } catch (err) {
-    console.error("❌ Erro ao enviar:", err);
-    res.status(500).json({ erro: "falha_ao_enviar" });
+    console.error("❌ Falha ao enviar notificação pelo WhatsApp:", err);
+
+    res.status(500).json({
+      status: "erro",
+      erro: "falha_ao_enviar",
+      mensagem: err.message || "Falha desconhecida ao enviar WhatsApp."
+    });
   }
 });
 
@@ -604,7 +983,7 @@ Horário: ${horario}`;
 app.post("/notificar-aprovacao", async (req, res) => {
   const { nome, telefone } = req.body;
 
-  const destino = formatarDestinoWhatsApp(telefone);
+  const destino = normalizarNumeroWhatsApp(telefone);
 
   if (!destino) {
     return res.status(400).json({ erro: "telefone_invalido" });

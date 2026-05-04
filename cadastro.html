@@ -221,21 +221,7 @@
     <button id="btnEnviar">Enviar cadastro</button>
   </div>
 
-  <!-- ===============================
-       BIBLIOTECA DO SUPABASE
-  =============================== -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
   <script>
-    // ===============================
-    // CONEXÃO COM SUPABASE
-    // Usa a chave pública já utilizada nas telas do sistema.
-    // ===============================
-    const client = window.supabase.createClient(
-      "https://hblxvxgocemzctjbutgi.supabase.co",
-      "sb_publishable_12C1Wu47s3SuxqHZvQybdg_WubBGiQl"
-    );
-
     const inputNome = document.getElementById("nome");
     const inputTelefone = document.getElementById("telefone");
     const inputDataNascimento = document.getElementById("dataNascimento");
@@ -341,32 +327,8 @@
     }
 
     // ===============================
-    // FUNÇÃO: BUSCAR USUÁRIO PELO TELEFONE
-    // Consulta todos os usuários para comparar com as variações do telefone.
-    // ===============================
-    async function buscarUsuarioPorTelefone(telefone) {
-      const variantesDigitadas = gerarVariantesTelefone(telefone);
-
-      const { data: usuarios, error } = await client
-        .from("usuarios")
-        .select("*");
-
-      if (error) {
-        throw error;
-      }
-
-      return (usuarios || []).find(usuario => {
-        const variantesBanco = gerarVariantesTelefone(usuario.telefone);
-
-        return variantesBanco.some(numeroBanco =>
-          variantesDigitadas.includes(numeroBanco)
-        );
-      }) || null;
-    }
-
-    // ===============================
     // EVENTO: ENVIAR CADASTRO ONLINE
-    // Valida dados, evita duplicidade e salva como pendente.
+    // Valida dados e envia para a API segura do servidor.
     // ===============================
     btnEnviar.addEventListener("click", async () => {
       const nome = inputNome.value.trim();
@@ -387,41 +349,29 @@
       btnEnviar.innerText = "Enviando...";
 
       try {
-        const usuarioExistente = await buscarUsuarioPorTelefone(telefoneLimpo);
+        // ===============================
+        // ENVIAR CADASTRO PARA O SERVIDOR
+        // O servidor verifica duplicidade e salva no Supabase com service role.
+        // ===============================
+        const resposta = await fetch("/api/cadastro-online", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            nome: nome,
+            telefone: telefoneLimpo,
+            data_nascimento: dataNascimento
+          })
+        });
 
-        if (usuarioExistente) {
-          const statusExistente = String(usuarioExistente.status || "").toLowerCase();
+        const resultado = await resposta.json();
 
-          if (statusExistente === "pendente") {
-            mostrarAviso("Seu cadastro online já foi enviado e está aguardando análise da equipe.");
-            return;
-          }
-
-          mostrarAviso("Este número já possui cadastro. Chame o atendimento pelo WhatsApp para continuar.");
+        if (!resposta.ok || !resultado.ok) {
+          mostrarAviso(resultado.mensagem || "Erro ao enviar cadastro.");
           return;
         }
 
-        const { error } = await client
-          .from("usuarios")
-          .insert([{
-            nome: nome,
-            telefone: telefoneLimpo,
-            data_nascimento: dataNascimento,
-            cadastrado: false,
-            status: "pendente",
-            faltas: 0,
-            presencas: 0,
-            origem_cadastro: "online",
-            cadastro_online_em: new Date().toISOString(),
-            observacao: "Cadastro realizado online"
-          }]);
-
-        if (error) {
-          throw error;
-        }
-
         mostrarAviso(
-          "Cadastro enviado com sucesso! A equipe do CRJ irá analisar seus dados. Após aprovação, você poderá solicitar o agendamento pelo WhatsApp.",
+          resultado.mensagem || "Cadastro enviado com sucesso! A equipe do CRJ irá analisar seus dados. Após aprovação, você poderá solicitar o agendamento pelo WhatsApp.",
           "sucesso"
         );
 

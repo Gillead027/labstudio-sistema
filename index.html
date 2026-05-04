@@ -231,29 +231,7 @@
     <button id="btn">Confirmar Agendamento</button>
   </div>
 
-  <!-- ===============================
-       BIBLIOTECA DO SUPABASE
-  =============================== -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
   <script>
-    // ===============================
-    // CONEXÃO COM SUPABASE
-    // Aqui o site acessa o banco de dados
-    // ===============================
-    const client = window.supabase.createClient(
-      "https://hblxvxgocemzctjbutgi.supabase.co",
-      "sb_publishable_12C1Wu47s3SuxqHZvQybdg_WubBGiQl"
-    );
-
-    // ===============================
-    // LINK DO BOT
-    // IMPORTANTE:
-    // Se reiniciar o ngrok e o link mudar,
-    // atualize este endereço.
-    // ===============================
-    const BOT_URL = "https://tightly-rubber-dyslexic.ngrok-free.dev";
-
     // ===============================
     // CONFIGURAÇÃO DE FUNCIONAMENTO
     // O LabStudio funciona somente terça e quinta
@@ -404,43 +382,6 @@
     }
 
     // ===============================
-    // FUNÇÃO: BUSCAR USUÁRIO PELO TELEFONE
-    //
-    // Essa função consulta a tabela "usuarios"
-    // e tenta encontrar o telefone informado,
-    // considerando as variações possíveis.
-    // ===============================
-    async function buscarUsuarioPorTelefone(telefoneDigitado) {
-      const variantesDigitadas = gerarVariantesTelefone(telefoneDigitado);
-
-      console.log("🔎 Variantes digitadas:", variantesDigitadas);
-
-      const { data: usuarios, error } = await client
-        .from("usuarios")
-        .select("*");
-
-      if (error) {
-        throw error;
-      }
-
-      const usuarioEncontrado = (usuarios || []).find(usuario => {
-        const variantesBanco = gerarVariantesTelefone(usuario.telefone);
-
-        return variantesBanco.some(numeroBanco =>
-          variantesDigitadas.includes(numeroBanco)
-        );
-      });
-
-      if (usuarioEncontrado) {
-        console.log("✅ Usuário encontrado:", usuarioEncontrado.nome, usuarioEncontrado.telefone);
-      } else {
-        console.log("❌ Usuário não encontrado pelo telefone.");
-      }
-
-      return usuarioEncontrado || null;
-    }
-
-    // ===============================
     // EVENTO: QUANDO O USUÁRIO ESCOLHE UMA DATA
     //
     // Aqui validamos:
@@ -489,35 +430,28 @@
 
       try {
         // ===============================
-        // BUSCAR AGENDAMENTOS DO DIA
-        //
-        // Importante:
-        // .neq("status", "cancelado")
-        // faz com que agendamentos cancelados
-        // não ocupem mais horário.
+        // BUSCAR HORÁRIOS DISPONÍVEIS
+        // A consulta passa pelo servidor para funcionar com RLS ativo.
         // ===============================
-        const { data: agendados, error } = await client
-          .from("agendamentos")
-          .select("horario, status")
-          .eq("data", dataSelecionada)
-          .neq("status", "cancelado");
+        const resposta = await fetch(`/api/horarios?data=${encodeURIComponent(dataSelecionada)}`);
+        const resultado = await resposta.json();
 
-        if (error) throw error;
+        if (!resposta.ok || !resultado.ok) {
+          throw new Error(resultado.mensagem || "Erro ao consultar agenda.");
+        }
 
-        const ocupados = (agendados || []).map(item => String(item.horario).trim());
+        const horariosDisponiveis = resultado.horarios || resultado.horariosDisponiveis || [];
 
         selectHorario.innerHTML = '<option value="">Escolha o horário</option>';
 
         // ===============================
         // MOSTRAR APENAS HORÁRIOS LIVRES
         // ===============================
-        horariosTerQui.forEach(hora => {
-          if (!ocupados.includes(hora)) {
-            const option = document.createElement("option");
-            option.value = hora;
-            option.textContent = hora;
-            selectHorario.appendChild(option);
-          }
+        horariosDisponiveis.forEach(hora => {
+          const option = document.createElement("option");
+          option.value = hora;
+          option.textContent = hora;
+          selectHorario.appendChild(option);
         });
 
         if (selectHorario.options.length === 1) {
@@ -536,11 +470,9 @@
     //
     // Fluxo:
     // 1. valida campos;
-    // 2. busca cadastro pelo telefone;
-    // 3. bloqueia não cadastrados;
-    // 4. bloqueia quem tem 2 faltas ou status bloqueado;
-    // 5. salva agendamento;
-    // 6. envia notificação para o bot.
+    // 2. envia para a API segura do servidor;
+    // 3. o servidor valida cadastro, idade, faltas, status e horário;
+    // 4. se salvar com sucesso, envia notificação para o bot.
     // ===============================
     btnAgendar.addEventListener("click", async () => {
       const nome = inputNome.value.trim();
@@ -558,108 +490,59 @@
       }
 
       btnAgendar.disabled = true;
-      btnAgendar.innerText = "Verificando cadastro...";
+      btnAgendar.innerText = "Agendando...";
 
       try {
         // ===============================
-        // VERIFICAR CADASTRO DO USUÁRIO
-        // Essa é a trava do site.
-        // Mesmo que a pessoa tenha o link,
-        // ela não agenda se não estiver apta.
+        // CRIAR AGENDAMENTO VIA API
+        // O servidor faz as consultas no Supabase usando service role,
+        // preparando o frontend público para RLS ativo.
         // ===============================
-        const usuario = await buscarUsuarioPorTelefone(telefone);
+        const respostaAgendamento = await fetch("/api/agendar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            nome,
+            telefone,
+            data: dataStr,
+            horario
+          })
+        });
 
-        // ===============================
-        // CASO NÃO ESTEJA CADASTRADO
-        // ===============================
-        if (!usuario || usuario.cadastrado === false) {
-          mostrarAviso("⚠️ Você precisa estar cadastrado no CRJ antes de agendar. Procure a equipe presencialmente.");
-          alert("⚠️ Você precisa estar cadastrado no CRJ antes de agendar. Procure a equipe presencialmente.");
-          btnAgendar.disabled = false;
-          btnAgendar.innerText = "Confirmar Agendamento";
-          return;
+        const resultadoAgendamento = await respostaAgendamento.json();
+
+        if (!respostaAgendamento.ok || !resultadoAgendamento.ok) {
+          throw new Error(resultadoAgendamento.mensagem || "Erro ao salvar agendamento.");
         }
 
-        // ===============================
-        // VERIFICAR DATA DE NASCIMENTO E IDADE
-        // A regra do CRJ permite agendamento apenas de 15 a 29 anos.
-        // ===============================
-        if (!usuario.data_nascimento) {
-          mostrarAviso("Seu cadastro precisa ser atualizado com a data de nascimento. Procure a equipe do CRJ.");
-          alert("Seu cadastro precisa ser atualizado com a data de nascimento. Procure a equipe do CRJ.");
-          btnAgendar.disabled = false;
-          btnAgendar.innerText = "Confirmar Agendamento";
-          return;
-        }
-
-        if (!idadePermitida(usuario.data_nascimento)) {
-          mostrarAviso("O LabStudio atende jovens de 15 a 29 anos. Procure a equipe do CRJ.");
-          alert("O LabStudio atende jovens de 15 a 29 anos. Procure a equipe do CRJ.");
-          btnAgendar.disabled = false;
-          btnAgendar.innerText = "Confirmar Agendamento";
-          return;
-        }
-
-        // ===============================
-        // VERIFICAR FALTAS E STATUS
-        // ===============================
-        const statusUsuario = String(usuario.status || "").toLowerCase();
-        const faltasUsuario = Number(usuario.faltas || 0);
-
-        if (statusUsuario === "bloqueado" || faltasUsuario >= 2) {
-          mostrarAviso("🚫 Você está bloqueado por faltas. Procure a equipe do CRJ para regularizar sua situação.");
-          alert("🚫 Você está bloqueado por faltas. Procure a equipe do CRJ para regularizar sua situação.");
-          btnAgendar.disabled = false;
-          btnAgendar.innerText = "Confirmar Agendamento";
-          return;
-        }
-
-        btnAgendar.innerText = "Agendando...";
-
-        // ===============================
-        // SALVAR AGENDAMENTO NO SUPABASE
-        //
-        // status: "agendado"
-        // já deixa pronto para o painel admin
-        // alterar depois para:
-        // compareceu, faltou ou cancelado.
-        // ===============================
-        const { error } = await client
-          .from("agendamentos")
-          .insert([{ 
-            nome, 
-            telefone, 
-            data: dataStr, 
-            horario,
-            status: "agendado"
-          }]);
-
-        if (error) throw error;
+        const agendamento = resultadoAgendamento.agendamento || {};
 
         // ===============================
         // NOTIFICAR O BOT NO WHATSAPP
         //
-        // Se o bot/ngrok estiver offline,
+        // Se o bot local estiver offline,
         // o agendamento continua salvo,
         // mas aparece aviso no console.
         // ===============================
         try {
-          await fetch(`${BOT_URL}/notificar`, {
+          await fetch("/notificar", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-              nome, 
-              telefone, 
-              data: dataStr, 
-              horario 
+            body: JSON.stringify({
+              nome: agendamento.nome || nome,
+              telefone: agendamento.telefone || telefone,
+              data: agendamento.data || dataStr,
+              horario: agendamento.horario || horario
             })
           });
         } catch (zapError) {
           console.warn("Agendamento salvo, mas a notificação no WhatsApp falhou:", zapError);
         }
 
-        mostrarAviso(`Confirmado, ${nome}! 🔥\nTe esperamos dia ${dataStr} às ${horario}.`, "sucesso");
-        alert(`Confirmado, ${nome}! 🔥\nTe esperamos dia ${dataStr} às ${horario}.`);
+        const mensagemSucesso = resultadoAgendamento.mensagem || `Confirmado, ${nome}! 🔥\nTe esperamos dia ${dataStr} às ${horario}.`;
+
+        mostrarAviso(mensagemSucesso, "sucesso");
+        alert(mensagemSucesso);
         location.reload();
 
       } catch (err) {

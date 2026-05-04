@@ -35,12 +35,23 @@ Preencha o `.env` com os valores reais:
 PORT=3001
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 BOT_NOTIFY_NUMBER=
 PUBLIC_SITE_URL=
 ALLOWED_ORIGINS=
 ```
 
 Nunca suba o `.env` para o Git.
+
+### Service Role do Supabase
+
+A variável `SUPABASE_SERVICE_ROLE_KEY` é obrigatória no servidor para as rotas internas de API, como:
+
+- `GET /api/horarios`
+- `POST /api/agendar`
+- `POST /api/cadastro-online`
+
+Essa chave permite que o `server.js` execute operações internas mesmo com RLS ativo no Supabase. Ela nunca deve ser colocada em `index.html`, `admin.html`, `cadastro.html` ou qualquer arquivo enviado ao navegador.
 
 ## Rodar Localmente
 
