@@ -2402,14 +2402,25 @@
           })
         });
 
+        const textoResposta = await resposta.text();
+        let resultadoNotificacao = {};
+
+        try {
+          resultadoNotificacao = textoResposta ? JSON.parse(textoResposta) : {};
+        } catch (_err) {
+          resultadoNotificacao = {
+            mensagem: textoResposta.slice(0, 160)
+          };
+        }
+
         if (!resposta.ok) {
-          throw new Error("Bot indisponível ou falha no envio.");
+          throw new Error(resultadoNotificacao.mensagem || `Bot retornou erro ${resposta.status}.`);
         }
 
         mostrarToast("Cadastro aprovado. A mensagem com o link foi enviada pelo WhatsApp.", "sucesso");
       } catch (zapError) {
         console.warn("Cadastro aprovado, mas a mensagem no WhatsApp falhou:", zapError);
-        mostrarToast("Cadastro aprovado, mas não consegui enviar a mensagem pelo WhatsApp. Verifique se o bot está online.", "aviso");
+        mostrarToast(`Cadastro aprovado, mas não consegui enviar a mensagem pelo WhatsApp: ${zapError.message}`, "aviso");
       } finally {
         definirLoadingBotao(botao, false, "Aprovando...", "Aprovar cadastro");
       }

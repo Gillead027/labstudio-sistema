@@ -821,6 +821,32 @@ function mascararNumeroWhatsApp(destino) {
 // 2797136155
 // 552797136155
 // ===============================
+async function resolverDestinoWhatsApp(telefone) {
+  const variantes = gerarVariantesTelefone(telefone);
+  const candidatos = new Set();
+
+  for (const variante of variantes) {
+    const numero = limparTelefone(variante);
+    if (!numero) continue;
+
+    candidatos.add(numero.startsWith("55") ? numero : `55${numero}`);
+  }
+
+  for (const numero of candidatos) {
+    try {
+      const numberId = await client.getNumberId(numero);
+
+      if (numberId && numberId._serialized) {
+        return numberId._serialized;
+      }
+    } catch (err) {
+      console.warn(`⚠️ Não foi possível validar o WhatsApp ${mascararNumeroWhatsApp(numero)}:`, err.message || err);
+    }
+  }
+
+  return normalizarNumeroWhatsApp(telefone);
+}
+
 function gerarVariantesTelefone(valor) {
   const numero = limparTelefone(valor);
 
@@ -1320,9 +1346,13 @@ app.post("/api/cadastro-online", async (req, res) => {
     let whatsappConfirmacaoEnviado = false;
 
     try {
-      const destinoConfirmacao = normalizarNumeroWhatsApp(telefoneLimpo);
+      if (botPronto) {
+        const destinoConfirmacao = await resolverDestinoWhatsApp(telefoneLimpo);
 
-      if (botPronto && destinoConfirmacao) {
+        if (!destinoConfirmacao) {
+          throw new Error("telefone_invalido");
+        }
+
         const mensagemConfirmacao = `Olá, ${nome}!
 
 Recebemos seu cadastro online no LabStudio CRJ FLEXAL.
@@ -1625,11 +1655,17 @@ Horário: ${horario}`;
 // ===============================
 app.post("/notificar-aprovacao", async (req, res) => {
   const { nome, telefone } = req.body;
+  console.log(`📨 /notificar-aprovacao recebeu: nome=${nome || "sem nome"}, telefone=${mascararNumeroWhatsApp(telefone)}`);
 
-  const destino = normalizarNumeroWhatsApp(telefone);
+  const telefoneLimpo = limparTelefone(telefone);
 
-  if (!destino) {
-    return res.status(400).json({ erro: "telefone_invalido" });
+  if (!telefoneLimpo) {
+    console.warn("⚠️ /notificar-aprovacao sem telefone válido.");
+
+    return res.status(400).json({
+      erro: "telefone_invalido",
+      mensagem: "Telefone inválido ou ausente para enviar a aprovação."
+    });
   }
 
   const mensagem = `Olá, ${nome || "jovem"}!
@@ -1644,16 +1680,36 @@ Aguardamos você para realizar sua gravação! 🔥`;
   try {
     if (!botPronto) {
       console.log("⚠️ Bot ainda não está pronto para enviar aprovação.");
-      return res.status(503).json({ erro: "bot_nao_pronto" });
+      return res.status(503).json({
+        erro: "bot_nao_pronto",
+        mensagem: "WhatsApp ainda não está pronto para enviar aprovação."
+      });
+    }
+
+    const destino = await resolverDestinoWhatsApp(telefoneLimpo);
+
+    if (!destino) {
+      console.warn(`⚠️ Não foi possível resolver destino WhatsApp para ${mascararNumeroWhatsApp(telefoneLimpo)}.`);
+
+      return res.status(400).json({
+        erro: "telefone_whatsapp_nao_encontrado",
+        mensagem: "Não encontrei esse telefone como WhatsApp válido para enviar a aprovação."
+      });
     }
 
     await client.sendMessage(destino, mensagem);
 
-    console.log(`✅ Aprovação enviada para ${nome || "usuário"} - ${telefone}`);
-    res.json({ status: "enviado" });
+    console.log(`✅ Aprovação enviada para ${nome || "usuário"} - ${mascararNumeroWhatsApp(destino)}`);
+    res.json({
+      status: "enviado",
+      destino: mascararNumeroWhatsApp(destino)
+    });
   } catch (err) {
     console.error("❌ Erro ao enviar aprovação:", err);
-    res.status(500).json({ erro: "falha_ao_enviar" });
+    res.status(500).json({
+      erro: "falha_ao_enviar",
+      mensagem: err.message || "Falha desconhecida ao enviar aprovação pelo WhatsApp."
+    });
   }
 });
 
