@@ -420,12 +420,10 @@
 
     // ===============================
     // URL BASE DA API
-    // Deixe em branco para chamadas locais.
-    // Quando o frontend estiver no Vercel e o backend no Railway,
-    // configure aqui o endereço completo do backend.
-    // Exemplo: const API_BASE_URL = "https://labstudio-backend.up.railway.app";
+    // Deixe em branco para usar rotas relativas.
+    // No Vercel, o arquivo vercel.json encaminha essas rotas para a VPS.
     // ===============================
-    const API_BASE_URL = "http://2.24.74.57:3001";
+    const API_BASE_URL = "";
 
     // ===============================
     // ELEMENTOS DO HTML
@@ -887,25 +885,8 @@
       }
     }
 
-    function verificarApiBaseUrl() {
-      const estaNoVercel = window.location.hostname.endsWith(".vercel.app");
-      const estaEmLocalhost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
-
-      if (!API_BASE_URL && (estaNoVercel || !estaEmLocalhost)) {
-        mostrarAviso(
-          "A URL da API não está configurada. Defina API_BASE_URL no index.html para o backend Railway.",
-          "aviso"
-        );
-        mostrarToast(
-          "API_BASE_URL ausente. O frontend Vercel precisa da URL do backend Railway.",
-          "aviso"
-        );
-      }
-    }
-
     carregarTemaSalvo();
     verificarProtocoloLocal();
-    verificarApiBaseUrl();
     btnTema.addEventListener("click", alternarTema);
     inputNome.addEventListener("input", validarNomeTempoReal);
     inputTelefone.addEventListener("input", validarTelefoneTempoReal);
