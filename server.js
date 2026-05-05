@@ -29,6 +29,8 @@ const PUBLIC_BOT_URL = String(process.env.PUBLIC_BOT_URL || "").replace(/\/$/, "
 // Crie no Railway:
 // QR_PAGE_TOKEN=uma_senha_forte
 const QR_PAGE_TOKEN = process.env.QR_PAGE_TOKEN;
+const CHROME_EXECUTABLE_PATH = process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/google-chrome-stable";
+const WWEBJS_AUTH_PATH = process.env.WWEBJS_AUTH_PATH || ".wwebjs_auth";
 
 const ALLOWED_ORIGINS = String(process.env.ALLOWED_ORIGINS || "")
   .split(",")
@@ -150,19 +152,24 @@ const DATAS_BLOQUEADAS = [
 const client = new Client({
   authStrategy: new LocalAuth({
     clientId: "bot-crj",
-    dataPath: process.env.WWEBJS_AUTH_PATH || ".wwebjs_auth"
+    dataPath: WWEBJS_AUTH_PATH
   }),
   puppeteer: {
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/chromium",
+    executablePath: CHROME_EXECUTABLE_PATH,
     headless: true,
+    timeout: 0,
+    protocolTimeout: 120000,
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
       "--disable-gpu",
       "--no-first-run",
-      "--no-zygote",
-      "--single-process"
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
+      "--disable-extensions",
+      "--disable-popup-blocking"
     ]
   }
 });
@@ -1400,7 +1407,25 @@ Aguardamos você para realizar sua gravação! 🔥`;
 // ===============================
 // INICIALIZA O CLIENTE DO WHATSAPP
 // ===============================
-client.initialize();
+async function inicializarWhatsAppComRetry(tentativa = 1) {
+  try {
+    console.log(`🚀 Inicializando WhatsApp... tentativa ${tentativa}`);
+    await client.initialize();
+  } catch (err) {
+    botPronto = false;
+    console.error("❌ Falha ao inicializar WhatsApp:", err);
+
+    if (tentativa < 5) {
+      const espera = 10000 * tentativa;
+      console.log(`⏳ Tentando novamente em ${espera / 1000}s...`);
+      setTimeout(() => inicializarWhatsAppComRetry(tentativa + 1), espera);
+    } else {
+      console.error("❌ Limite de tentativas atingido. Reinicie o processo ou verifique o Chrome/Puppeteer.");
+    }
+  }
+}
+
+inicializarWhatsAppComRetry();
 
 // ===============================
 // INICIALIZA O SERVIDOR
@@ -1411,7 +1436,11 @@ app.listen(PORT, "0.0.0.0", () => {
 
   const baseUrl = obterUrlBaseBot();
   const token = QR_PAGE_TOKEN ? encodeURIComponent(QR_PAGE_TOKEN) : "CONFIGURE_QR_PAGE_TOKEN";
+  const qrPageUrl = `${baseUrl}/qr?token=${token}`;
 
+  console.log(`🧭 Chrome usado pelo Puppeteer: ${CHROME_EXECUTABLE_PATH}`);
+  console.log(`💾 Sessão WhatsApp LocalAuth: ${WWEBJS_AUTH_PATH}`);
+  console.log(`🌐 URL pública do bot: ${baseUrl}`);
   console.log(`🔎 Status do bot: ${baseUrl}/status`);
-  console.log(`📲 Página do QR: ${baseUrl}/qr?token=${token}`);
+  console.log(`📲 Página do QR: ${qrPageUrl}`);
 });
