@@ -1406,6 +1406,26 @@ client.on("message", async (msg) => {
     if (!msg.body) return;
 
     const mensagemRecebida = msg.body.toLowerCase();
+    const mensagemNormalizada = mensagemRecebida
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\w\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    const saudacoesSimples = new Set([
+      "oi",
+      "ola",
+      "olá",
+      "bom dia",
+      "boa tarde",
+      "boa noite",
+      "eai",
+      "e ai",
+      "opa"
+    ]);
+
+    if (saudacoesSimples.has(mensagemNormalizada)) return;
 
     // Palavras que ativam o atendimento do LabStudio.
     const gatilhos = [
